@@ -1,0 +1,32 @@
+model {
+
+  for(k in 1:N_grid){
+    for(j in 1:N_trip){
+  		for(i in 1:N_animals)  {
+  			Y[i, j, k] ~ dbin(mu[i, j, k], J[j, k])
+		  	mu[i, j, k] <- z[i, j, k] * p[i, j, k]
+	  		z[i, j, k] ~ dbern(psi[j, k])
+	  		logit(p[i, j, k]) <- lp[i, j, k]
+	  	# model individual-level heterogeneity in capture probability 	
+	  		lp[i, j, k] ~ dnorm(mu.ind, tau.ind)
+		  } #i
+
+    # prior for presence probability differs betwen trips and grids
+    # use scale prior as in Link (2013)
+      psi[j, k] ~ dbeta(0.001, 1)
+
+    # Derived parameters: the estimated number of individuals on each grid at each trip
+      N[j, k] <- sum(z[, j, k])
+      logN[j, k] <- log(N[j, k])
+      
+    }  #j
+    
+  } #k
+  
+  # priors
+  
+  mu.ind ~ dnorm(0, 0.001)
+  tau.ind <- 1 / (sigma.ind * sigma.ind)
+  sigma.ind ~ dunif(0, 10)
+
+  }

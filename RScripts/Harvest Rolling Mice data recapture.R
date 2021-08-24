@@ -6,8 +6,6 @@
   library(jagsUI)
 
   remove(list = ls())
-
-  setwd("c:\\users\\s429217\\onedrive\\data\\mice\\harvest rolling")
   unlogit <- function(x) exp(x) / (1 + exp(x))
 
 # Fate 2 = means dead (not counted in pre-baiting as 'not part of "baited  population", none post-treat on control sites, some on post-cotol treated sites but ignored - died as part on experimental treatment.)
@@ -16,14 +14,14 @@
   
 ################################################################################
 # read in trapping night data
-  tn <- read_excel("c:\\users\\s429217\\onedrive\\data\\mice\\harvest rolling\\Parkes Trapping Nights.xlsx", trim_ws = TRUE) %>%
+  tn <- read_excel("data/Parkes Trapping Nights.xlsx", trim_ws = TRUE) %>%
         mutate(grid = as.numeric(factor(DataSiteName)),
                 trip = as.numeric(factor(Trip)))
   glimpse(tn)
 
 ################################################################################
 # read in capture data
-  dat <- read_excel("c:\\users\\s429217\\onedrive\\data\\mice\\harvest rolling\\CMR Parkes 19.03.21.xlsx", trim_ws = TRUE)
+  dat <- read_excel("data/CMR Parkes 19.03.21.xlsx", trim_ws = TRUE)
   glimpse(dat)
 
 # remove dead individuals - only use Fate == 1, 3 or 4
@@ -114,8 +112,8 @@
   n.day <- max(tn$NightsTrapped)
   
 # set up array Y with rows i = indiviudals, columns = j = trip, k = grids
-  Y <- array(0, dim = c(400, n.trip, n.grid))
-  z <- array(NA, dim = c(400, n.trip, n.grid))
+  Y <- array(0, dim = c(1000, n.trip, n.grid))
+  z <- array(NA, dim = c(1000, n.trip, n.grid))
 
 # number of nights trapping
   J <- array(0, dim = c(n.trip, n.grid))
@@ -219,7 +217,7 @@
   head(N)
 
 # save output for later use  
-  save.image("c:\\users\\s429217\\onedrive\\data\\mice\\harvest rolling\\N estimates.RData")
+  save.image("data/N estimates.RData")
 
 
 # for each grid, get the population size per trip
