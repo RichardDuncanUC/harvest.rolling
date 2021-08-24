@@ -7,7 +7,7 @@
 
   remove(list = ls())
   unlogit <- function(x) exp(x) / (1 + exp(x))
-
+  
 # Fate 2 = means dead (not counted in pre-baiting as 'not part of "baited  population", none post-treat on control sites, some on post-cotol treated sites but ignored - died as part on experimental treatment.)
 # Fate 3 = Escaped but alive so "1" really  
 # Fate 4 = taken to lab (only on last day so treat as 1 for analysis) 
