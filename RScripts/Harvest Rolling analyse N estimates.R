@@ -13,6 +13,48 @@
 
 ####################################################################################
 # get posterior populations size estimates for each grid
+# raw values to plot  
+  
+  Nout <- as.data.frame(mod.sum[substr(rownames(mod.sum), 1, 2) == "N[", c(1, 2, 3, 7)])
+  names(Nout) <- c("med", "sd", "lcl", "ucl")
+  Nout$trip <- as.numeric(substr(rownames(Nout), 3, 3))
+  Nout$grid <- as.numeric(substr(rownames(Nout), 5, 5))
+  Nout
+  
+  Nout <- left_join(Nout, tn) %>%
+    select(med, sd, lcl, ucl, trip, grid, Manipulation, NightsTrapped) %>%
+    filter(NightsTrapped > 0)
+  Nout
+  
+  min.mice <- min.mice %>%
+    arrange(grid, trip)
+  
+  Nout <- full_join(Nout, min.mice)
+  Nout
+  
+  Nout$Manipulation <- factor(Nout$Manipulation, levels = c("preharvest", "postharvest", "pre-rolling", "post-rolling"))
+
+  preharv <- Nout %>%
+    filter(Manipulation %in% c("preharvest", "postharvest")) %>%
+    drop_na()
+  
+  preharv
+  
+  ggplot(preharv, aes(y = med, x = Manipulation, group = grid)) +
+    geom_point(size = 4) +
+    geom_line() +
+    geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0, lwd = 1) +
+    geom_point(aes(y = n), size = 2, colour = "tomato") +
+    facet_wrap(~ grid) +
+    ylab("Density (mice/ha)") +
+    xlab("") +
+    ylim(0, max(preharv$ucl)) +
+    theme_bw() +
+    theme(legend.position = "none")  
+    
+################################################################################################
+# log values for analysing proportional reduction
+    
   Nout <- as.data.frame(mod.sum[substr(rownames(mod.sum), 1, 5) == "logN[", c(1, 2, 3, 7)])
   names(Nout) <- c("med", "sd", "lcl", "ucl")
   Nout$trip <- as.numeric(substr(rownames(Nout), 6, 6))
@@ -32,23 +74,11 @@
   
   Nout$Manipulation <- factor(Nout$Manipulation, levels = c("preharvest", "postharvest", "pre-rolling", "post-rolling"))
   
-################################################################################################
   preharv <- Nout %>%
     filter(Manipulation %in% c("preharvest", "postharvest")) %>%
     drop_na()
   
   preharv
-  
-  ggplot(preharv, aes(y = exp(med)/0.64, x = Manipulation, group = grid)) +
-    geom_point(size = 4) +
-    geom_line() +
-    geom_errorbar(aes(ymin = exp(lcl)/0.64, ymax = exp(ucl)/0.64), width = 0, lwd = 1) +
-    facet_wrap(~ grid) +
-    ylab("Density (mice/ha)") +
-    xlab("") +
-    ylim(0, 700) +
-    theme_bw() +
-    theme(legend.position = "none")
   
 ################################################################################################
 # data for model
@@ -61,13 +91,15 @@
 
   # JAGS model
   
-  mod <- "model {
+  mod2 <- "model {
 
   for(i in 1:N){
     med[i] ~ dnorm(mu[i], tau[i])
     tau[i] <- 1 / (gv + v.med[i])
     mu[i] <- b.treat[treat[i]] + b.grid[grid[i]]
   }
+  
+  treat.dif <- b.treat[2] - b.treat[1]
   
   b.treat[1] ~ dnorm(0, 0.001)
   b.treat[2] ~ dnorm(0, 0.001)
@@ -81,16 +113,13 @@
   tau.grid <- 1 / (sigma.grid * sigma.grid)
   sigma.grid ~ dunif(0, 100)
   
-  # treatment different
-  treat.dif <- b.treat[2] - b.treat[1]
-  
   }"  #model finish
   
 #RUN MODEL------------------------------------------------
   
-  write(mod, "mod.txt")
+  write(mod2, "mod.txt")
   
-  mod <- jags(model.file = "mod.txt",
+  mod2 <- jags(model.file = "mod.txt",
               data = list(N = N, med = med, v.med = v.med, grid = grid, treat = treat),
               parameters.to.save = c("b.treat", "treat.dif", "sigma", "sigma.grid"),
               n.chains = 3,
@@ -99,14 +128,15 @@
               n.thin = 1,
               parallel = T)
   
-  mod.sum <- mod$summary
-  mod.sum[, c(1, 2, 3, 7, 8, 9)]
+  mod2.sum <- mod2$summary
+  mod2.sum[, c(1, 2, 3, 7, 8, 9)]
   
-  exp(mod.sum[3, c(1, 3, 7)])
+# plot of posterior distribution of proportional change
+  pc <- exp(mod2$sims.list$treat.dif)
+  hist(pc[pc < 1.5], breaks = 30)
 
-  dec <- exp(mod$sims.list$treat.dif)
-  dec <- dec[dec < 1.5]
-  hist(dec, breaks = 30)
+# probability of reduction in mouse numbers
+  length(pc[pc < 1]) / length(pc)
   
-  
+    
   

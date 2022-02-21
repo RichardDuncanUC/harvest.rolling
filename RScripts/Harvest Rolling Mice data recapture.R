@@ -171,7 +171,8 @@
       psi[j, k] ~ dbeta(0.001, 1)
 
     # Derived parameters: the estimated number of individuals on each grid at each trip
-      N[j, k] <- sum(z[, j, k])
+    # expressed as a denisty
+      N[j, k] <- sum(z[, j, k]) / 0.64
       logN[j, k] <- log(N[j, k])
       
     }  #j

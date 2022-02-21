@@ -6,6 +6,8 @@ model {
     mu[i] <- b.treat[treat[i]] + b.grid[grid[i]]
   }
   
+  treat.dif <- b.treat[2] - b.treat[1]
+  
   b.treat[1] ~ dnorm(0, 0.001)
   b.treat[2] ~ dnorm(0, 0.001)
 
@@ -17,8 +19,5 @@ model {
   sigma ~ dunif(0, 100)
   tau.grid <- 1 / (sigma.grid * sigma.grid)
   sigma.grid ~ dunif(0, 100)
-  
-  # treatment different
-  treat.dif <- b.treat[2] - b.treat[1]
   
   }
