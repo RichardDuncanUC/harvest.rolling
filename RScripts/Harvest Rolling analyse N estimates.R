@@ -12,23 +12,18 @@
   glimpse(tn)
 
 ####################################################################################
-# for each grid, get the population size per trip
-  size <- function(grid) {
-    out <- apply(N[, , grid], 2, function(x) quantile(x, c(0.025, 0.5, 0.975), na.rm = T))
-    out <- data.frame(t(out))
-    names(out) <- c("lcl", "med", "ucl")
-    out$grid <- grid
-    out$trip <- 1:5
-    return(out)
-  }
+# get posterior populations size estimates for each grid
+  Nout <- as.data.frame(mod.sum[substr(rownames(mod.sum), 1, 5) == "logN[", c(1, 2, 3, 7)])
+  names(Nout) <- c("med", "sd", "lcl", "ucl")
+  Nout$trip <- as.numeric(substr(rownames(Nout), 6, 6))
+  Nout$grid <- as.numeric(substr(rownames(Nout), 8, 8))
+  Nout
   
-  Nout <- size(1)
-  for(i in 2:6) {
-    Nout <- rbind(Nout, size(i))
-  }
+  Nout <- left_join(Nout, tn) %>%
+    select(med, sd, lcl, ucl, trip, grid, Manipulation, NightsTrapped) %>%
+    filter(NightsTrapped > 0)
+  Nout
   
-  Nout <- full_join(tn, Nout)
-
   min.mice <- min.mice %>%
     arrange(grid, trip)
   
@@ -37,12 +32,78 @@
   
   Nout$Manipulation <- factor(Nout$Manipulation, levels = c("preharvest", "postharvest", "pre-rolling", "post-rolling"))
   
-  ggplot(Nout, aes(y = med, x = trip, colour = Manipulation)) +
+################################################################################################
+  preharv <- Nout %>%
+    filter(Manipulation %in% c("preharvest", "postharvest")) %>%
+    drop_na()
+  
+  preharv
+  
+  ggplot(preharv, aes(y = exp(med)/0.64, x = Manipulation, group = grid)) +
     geom_point(size = 4) +
-    geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0.2, lwd = 1.1) +
-    facet_wrap(~ DataSiteName) +
-    ylab("Mark-recapture estimate of population size") +
-    xlab("Trip") +
+    geom_line() +
+    geom_errorbar(aes(ymin = exp(lcl)/0.64, ymax = exp(ucl)/0.64), width = 0, lwd = 1) +
+    facet_wrap(~ grid) +
+    ylab("Density (mice/ha)") +
+    xlab("") +
+    ylim(0, 700) +
     theme_bw() +
-    theme(legend.position = "top")
+    theme(legend.position = "none")
+  
+################################################################################################
+# data for model
+  
+  med <- preharv$med
+  v.med <- preharv$sd^2
+  grid <- as.numeric(factor(preharv$grid))
+  treat <- as.numeric(factor(preharv$Manipulation, levels = c("preharvest", "postharvest")))
+  N <- length(med)
+
+  # JAGS model
+  
+  mod <- "model {
+
+  for(i in 1:N){
+    med[i] ~ dnorm(mu[i], tau[i])
+    tau[i] <- 1 / (gv + v.med[i])
+    mu[i] <- b.treat[treat[i]] + b.grid[grid[i]]
+  }
+  
+  b.treat[1] ~ dnorm(0, 0.001)
+  b.treat[2] ~ dnorm(0, 0.001)
+
+  for(i in 1:4) {
+    b.grid[i] ~ dnorm(0, tau.grid)
+  }
+
+  gv <- sigma * sigma
+  sigma ~ dunif(0, 100)
+  tau.grid <- 1 / (sigma.grid * sigma.grid)
+  sigma.grid ~ dunif(0, 100)
+  
+  # treatment different
+  treat.dif <- b.treat[2] - b.treat[1]
+  
+  }"  #model finish
+  
+#RUN MODEL------------------------------------------------
+  
+  write(mod, "mod.txt")
+  
+  mod <- jags(model.file = "mod.txt",
+              data = list(N = N, med = med, v.med = v.med, grid = grid, treat = treat),
+              parameters.to.save = c("b.treat", "treat.dif", "sigma", "sigma.grid"),
+              n.chains = 3,
+              n.iter = 15000,
+              n.burnin = 5000,
+              n.thin = 1,
+              parallel = T)
+  
+  mod.sum <- mod$summary
+  mod.sum[, c(1, 2, 3, 7, 8, 9)]
+  
+  exp(-0.528)
+  
+  
+  
   

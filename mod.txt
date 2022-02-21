@@ -1,0 +1,24 @@
+model {
+
+  for(i in 1:N){
+    med[i] ~ dnorm(mu[i], tau[i])
+    tau[i] <- 1 / (gv + v.med[i])
+    mu[i] <- b.treat[treat[i]] + b.grid[grid[i]]
+  }
+  
+  b.treat[1] ~ dnorm(0, 0.001)
+  b.treat[2] ~ dnorm(0, 0.001)
+
+  for(i in 1:4) {
+    b.grid[i] ~ dnorm(0, tau.grid)
+  }
+
+  gv <- sigma * sigma
+  sigma ~ dunif(0, 100)
+  tau.grid <- 1 / (sigma.grid * sigma.grid)
+  sigma.grid ~ dunif(0, 100)
+  
+  # treatment different
+  treat.dif <- b.treat[2] - b.treat[1]
+  
+  }
