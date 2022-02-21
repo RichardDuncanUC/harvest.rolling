@@ -102,8 +102,11 @@
   mod.sum <- mod$summary
   mod.sum[, c(1, 2, 3, 7, 8, 9)]
   
-  exp(-0.528)
-  
+  exp(mod.sum[3, c(1, 3, 7)])
+
+  dec <- exp(mod$sims.list$treat.dif)
+  dec <- dec[dec < 1.5]
+  hist(dec, breaks = 30)
   
   
   
