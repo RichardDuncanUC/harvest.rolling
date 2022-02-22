@@ -11,7 +11,7 @@ model {
   b.treat[1] ~ dnorm(0, 0.001)
   b.treat[2] ~ dnorm(0, 0.001)
 
-  for(i in 1:4) {
+  for(i in 1:6) {
     b.grid[i] ~ dnorm(0, tau.grid)
   }
 

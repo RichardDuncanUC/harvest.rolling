@@ -34,11 +34,39 @@
   
   Nout$Manipulation <- factor(Nout$Manipulation, levels = c("preharvest", "postharvest", "pre-rolling", "post-rolling"))
 
+# specify blocks
+  Nout$block <- 1
+  Nout$block[Nout$grid %in% c(4, 6)] <- 2
+  Nout$block[Nout$grid %in% c(1, 2)] <- 3
+  Nout
+  
+# log values for analysing proportional reduction
+  
+  lNout <- as.data.frame(mod.sum[substr(rownames(mod.sum), 1, 5) == "logN[", c(1, 2, 3, 7)])
+  names(lNout) <- c("med", "sd", "lcl", "ucl")
+  lNout$trip <- as.numeric(substr(rownames(lNout), 6, 6))
+  lNout$grid <- as.numeric(substr(rownames(lNout), 8, 8))
+  lNout
+  
+  lNout <- left_join(lNout, tn) %>%
+    select(med, sd, lcl, ucl, trip, grid, Manipulation, NightsTrapped) %>%
+    filter(NightsTrapped > 0)
+  lNout
+  
+  lNout <- full_join(lNout, min.mice)
+  lNout
+  
+  lNout$Manipulation <- factor(lNout$Manipulation, levels = c("preharvest", "postharvest", "pre-rolling", "post-rolling"))
+  
+#######################################################################################################
+# Harvest analysis
+# raw values to plot
+  
   preharv <- Nout %>%
     filter(Manipulation %in% c("preharvest", "postharvest")) %>%
     drop_na()
   
-  preharv
+  preharv$grid <- factor(preharv$grid, levels = c(3, 5, 4, 6))
   
   ggplot(preharv, aes(y = med, x = Manipulation, group = grid)) +
     geom_point(size = 4) +
@@ -53,44 +81,21 @@
     theme(legend.position = "none")  
     
 ################################################################################################
-# log values for analysing proportional reduction
-    
-  Nout <- as.data.frame(mod.sum[substr(rownames(mod.sum), 1, 5) == "logN[", c(1, 2, 3, 7)])
-  names(Nout) <- c("med", "sd", "lcl", "ucl")
-  Nout$trip <- as.numeric(substr(rownames(Nout), 6, 6))
-  Nout$grid <- as.numeric(substr(rownames(Nout), 8, 8))
-  Nout
-  
-  Nout <- left_join(Nout, tn) %>%
-    select(med, sd, lcl, ucl, trip, grid, Manipulation, NightsTrapped) %>%
-    filter(NightsTrapped > 0)
-  Nout
-  
-  min.mice <- min.mice %>%
-    arrange(grid, trip)
-  
-  Nout <- full_join(Nout, min.mice)
-  Nout
-  
-  Nout$Manipulation <- factor(Nout$Manipulation, levels = c("preharvest", "postharvest", "pre-rolling", "post-rolling"))
-  
-  preharv <- Nout %>%
+# log values for analysis
+  lpreharv <- lNout %>%
     filter(Manipulation %in% c("preharvest", "postharvest")) %>%
     drop_na()
   
-  preharv
+  lpreharv
   
-################################################################################################
 # data for model
-  
-  med <- preharv$med
-  v.med <- preharv$sd^2
-  grid <- as.numeric(factor(preharv$grid))
-  treat <- as.numeric(factor(preharv$Manipulation, levels = c("preharvest", "postharvest")))
+  med <- lpreharv$med
+  v.med <- lpreharv$sd^2
+  grid <- as.numeric(factor(lpreharv$grid))
+  treat <- as.numeric(factor(lpreharv$Manipulation, levels = c("preharvest", "postharvest")))
   N <- length(med)
 
-  # JAGS model
-  
+# JAGS model
   mod2 <- "model {
 
   for(i in 1:N){
@@ -132,11 +137,103 @@
   mod2.sum[, c(1, 2, 3, 7, 8, 9)]
   
 # plot of posterior distribution of proportional change
-  pc <- exp(mod2$sims.list$treat.dif)
-  hist(pc[pc < 1.5], breaks = 30)
+  pc <- exp(mod2$sims.list$treat.dif) - 1
+  hist(pc[pc < 0.5], breaks = 30, xlab = "Proportional change in population size", freq = FALSE,
+       ylab = "Probability density")
 
 # probability of reduction in mouse numbers
-  length(pc[pc < 1]) / length(pc)
+  length(pc[pc < 0]) / length(pc)
   
-    
+# mean reduction in size
+  1 - exp(mod2.sum[3, 1])
+  
+###############################################################################################    
+# Rolling analysis
+# raw values to plot and add blocks
+  
+  roll <- Nout %>%
+    filter(Manipulation %in% c("pre-rolling", "post-rolling")) %>%
+    drop_na()
+
+  roll$grid <- factor(roll$grid, levels = c(3, 5, 4, 6, 1, 2))
+  
+  ggplot(roll, aes(y = med, x = Manipulation, group = grid)) +
+    geom_point(size = 4) +
+    geom_line() +
+    geom_errorbar(aes(ymin = lcl, ymax = ucl), width = 0, lwd = 1) +
+    geom_point(aes(y = n), size = 2, colour = "tomato") +
+    facet_wrap(~ grid, ncol = 2) +
+    ylab("Density (mice/ha)") +
+    xlab("") +
+    ylim(0, max(roll$ucl)) +
+    theme_bw() +
+    theme(legend.position = "none")    
+  
+################################################################################################
+# log values for analysis
+  lroll <- lNout %>%
+    filter(Manipulation %in% c("pre-rolling", "post-rolling")) %>%
+    drop_na()
+  
+  lroll
+  
+  # data for model
+  med <- lroll$med
+  v.med <- lroll$sd^2
+  grid <- as.numeric(factor(lroll$grid))
+  treat <- as.numeric(factor(lroll$Manipulation, levels = c("pre-rolling", "post-rolling")))
+  N <- length(med)
+  
+  # JAGS model
+  mod3 <- "model {
+
+  for(i in 1:N){
+    med[i] ~ dnorm(mu[i], tau[i])
+    tau[i] <- 1 / (gv + v.med[i])
+    mu[i] <- b.treat[treat[i]] + b.grid[grid[i]]
+  }
+  
+  treat.dif <- b.treat[2] - b.treat[1]
+  
+  b.treat[1] ~ dnorm(0, 0.001)
+  b.treat[2] ~ dnorm(0, 0.001)
+
+  for(i in 1:6) {
+    b.grid[i] ~ dnorm(0, tau.grid)
+  }
+
+  gv <- sigma * sigma
+  sigma ~ dunif(0, 100)
+  tau.grid <- 1 / (sigma.grid * sigma.grid)
+  sigma.grid ~ dunif(0, 100)
+  
+  }"  #model finish
+  
+  #RUN MODEL------------------------------------------------
+  
+  write(mod3, "mod.txt")
+  
+  mod3 <- jags(model.file = "mod.txt",
+               data = list(N = N, med = med, v.med = v.med, grid = grid, treat = treat),
+               parameters.to.save = c("b.treat", "treat.dif", "sigma", "sigma.grid"),
+               n.chains = 3,
+               n.iter = 15000,
+               n.burnin = 5000,
+               n.thin = 1,
+               parallel = T)
+  
+  mod3.sum <- mod3$summary
+  mod3.sum[, c(1, 2, 3, 7, 8, 9)]
+  
+# plot of posterior distribution of proportional change
+  pc2 <- exp(mod3$sims.list$treat.dif) - 1
+  hist(pc2[pc2 < 1], breaks = 30, xlab = "Proportional change in population size", freq = FALSE,
+       ylab = "Probability density")
+  
+# probability of reduction in mouse numbers
+  length(pc2[pc2 < 0]) / length(pc2)
+  
+# mean reduction in size
+  1 - exp(mod3.sum[3, 1])
+  
   
